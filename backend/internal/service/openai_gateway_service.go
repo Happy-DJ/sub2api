@@ -4971,49 +4971,52 @@ func convertReasoningContentToThinkingBlocks(body []byte) []byte {
 			return true
 		}
 
-		// Check if content is an array
-		if contentResult.Type != gjson.JSON {
-			return true
-		}
-
-		contentArray := contentResult.Array()
-
-		// Check if there's already a thinking block with the same content
-		alreadyHasThinkingBlock := false
-		for _, block := range contentArray {
-			if block.Get("type").String() == "thinking" {
-				existingThinking := block.Get("thinking").String()
-				if existingThinking == reasoningContent {
-					alreadyHasThinkingBlock = true
-					break
-				}
-			}
-		}
-
-		if alreadyHasThinkingBlock {
-			return true
-		}
-
-		// Build new content array with thinking block at the beginning
+		// Build new content array with thinking block at the beginning.
+		// Content can be either a string or an array of objects.
 		var newContent []any
 		newContent = append(newContent, map[string]any{
 			"type":     "thinking",
 			"thinking": reasoningContent,
 		})
 
-		for _, block := range contentArray {
-			blockMap, ok := block.Value().(map[string]any)
-			if !ok {
-				newContent = append(newContent, block.Value())
-				continue
+		if contentResult.Type == gjson.JSON {
+			// Content is an array — check for existing thinking block and append elements
+			contentArray := contentResult.Array()
+			alreadyHasThinkingBlock := false
+			for _, block := range contentArray {
+				if block.Get("type").String() == "thinking" {
+					existingThinking := block.Get("thinking").String()
+					if existingThinking == reasoningContent {
+						alreadyHasThinkingBlock = true
+						break
+					}
+				}
 			}
-			// Skip blocks that are empty or redundant
-			blockType, _ := blockMap["type"].(string)
-			if blockType == "thinking" {
-				// Already checked above, but skip to avoid duplication
-				continue
+			if alreadyHasThinkingBlock {
+				return true
 			}
-			newContent = append(newContent, blockMap)
+			for _, block := range contentArray {
+				blockMap, ok := block.Value().(map[string]any)
+				if !ok {
+					newContent = append(newContent, block.Value())
+					continue
+				}
+				blockType, _ := blockMap["type"].(string)
+				if blockType == "thinking" {
+					continue
+				}
+				newContent = append(newContent, blockMap)
+			}
+		} else {
+			// Content is a string (common case for DeepSeek responses)
+			// Convert the string content to a text block in the array
+			contentStr := contentResult.String()
+			if contentStr != "" {
+				newContent = append(newContent, map[string]any{
+					"type": "text",
+					"text": contentStr,
+				})
+			}
 		}
 
 		newContentBytes, err := json.Marshal(newContent)

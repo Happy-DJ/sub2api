@@ -70,7 +70,17 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	// forward the Chat Completions request directly without converting to
 	// Responses API. DeepSeek and similar OpenAI-compatible providers only
 	// support the /v1/chat/completions endpoint.
-	if account.IsOpenAIPassthroughEnabled() || isDeepSeekEndpoint(account) {
+	isDeepSeek := isDeepSeekEndpoint(account)
+	isPassthrough := account.IsOpenAIPassthroughEnabled()
+	if isPassthrough || isDeepSeek {
+		logger.L().Info("openai chat_completions: using passthrough path",
+			zap.Int64("account_id", account.ID),
+			zap.String("account_platform", account.Platform),
+			zap.String("account_type", account.Type),
+			zap.Bool("is_deepseek", isDeepSeek),
+			zap.Bool("is_passthrough", isPassthrough),
+			zap.String("base_url", account.GetOpenAIBaseURL()),
+		)
 		return s.forwardChatCompletionsPassthrough(ctx, c, account, body, originalModel, billingModel, upstreamModel, clientStream, includeUsage, startTime)
 	}
 
