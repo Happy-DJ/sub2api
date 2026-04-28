@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
@@ -2761,6 +2762,11 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	// Kimi 等上游要求 assistant tool_call 消息携带 reasoning_content
 	body = injectReasoningContentForToolCalls(body)
 
+	// DeepSeek 思考模式要求 reasoning_content 以 thinking 块形式传回
+	if isDeepSeekEndpoint(account) {
+		body = convertReasoningContentToThinkingBlocks(body)
+	}
+
 	logger.LegacyPrintf("service.openai_gateway",
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
 		account.ID,
@@ -4905,6 +4911,171 @@ func injectReasoningContentForToolCalls(body []byte) []byte {
 	if !modified {
 		return body
 	}
+	return out
+}
+
+// isDeepSeekEndpoint checks if the account's base URL indicates a DeepSeek endpoint.
+func isDeepSeekEndpoint(account *Account) bool {
+	if account == nil {
+		return false
+	}
+	baseURL := account.GetOpenAIBaseURL()
+	return strings.Contains(strings.ToLower(baseURL), "deepseek")
+}
+
+// convertReasoningContentToThinkingBlocks converts reasoning_content field in assistant
+// messages to thinking blocks in the content array for DeepSeek API compatibility.
+//
+// DeepSeek's thinking mode requires that when reasoning_content is present in an
+// assistant message, it must be passed back as a thinking block in the content array,
+// not as a top-level reasoning_content field. This function performs the conversion.
+//
+// Before: {"role":"assistant","reasoning_content":"...","content":[...]}
+// After:  {"role":"assistant","content":[{"type":"thinking","thinking":"..."},...]}
+//
+// If the message already contains a thinking block with the same content, it will not
+// be duplicated. If reasoning_content is empty or the message has no content array,
+// no conversion is performed.
+func convertReasoningContentToThinkingBlocks(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+
+	// Fast path: check if body contains reasoning_content field
+	if !bytes.Contains(body, []byte(`"reasoning_content"`)) {
+		return body
+	}
+
+	jsonStr := *(*string)(unsafe.Pointer(&body))
+	messages := gjson.Get(jsonStr, "messages")
+	if !messages.Exists() || !messages.IsArray() {
+		return body
+	}
+
+	modified := false
+	out := body
+
+	messages.ForEach(func(idx gjson.Result, msg gjson.Result) bool {
+		role := msg.Get("role").String()
+		if role != "assistant" {
+			return true
+		}
+
+		reasoningContent := msg.Get("reasoning_content").String()
+		if reasoningContent == "" {
+			return true
+		}
+
+		contentResult := msg.Get("content")
+		if !contentResult.Exists() {
+			return true
+		}
+
+		// Check if content is an array
+		if contentResult.Type != gjson.JSON {
+			return true
+		}
+
+		contentArray := contentResult.Array()
+
+		// Check if there's already a thinking block with the same content
+		alreadyHasThinkingBlock := false
+		for _, block := range contentArray {
+			if block.Get("type").String() == "thinking" {
+				existingThinking := block.Get("thinking").String()
+				if existingThinking == reasoningContent {
+					alreadyHasThinkingBlock = true
+					break
+				}
+			}
+		}
+
+		if alreadyHasThinkingBlock {
+			return true
+		}
+
+		// Build new content array with thinking block at the beginning
+		var newContent []any
+		newContent = append(newContent, map[string]any{
+			"type":     "thinking",
+			"thinking": reasoningContent,
+		})
+
+		for _, block := range contentArray {
+			blockMap, ok := block.Value().(map[string]any)
+			if !ok {
+				newContent = append(newContent, block.Value())
+				continue
+			}
+			// Skip blocks that are empty or redundant
+			blockType, _ := blockMap["type"].(string)
+			if blockType == "thinking" {
+				// Already checked above, but skip to avoid duplication
+				continue
+			}
+			newContent = append(newContent, blockMap)
+		}
+
+		newContentBytes, err := json.Marshal(newContent)
+		if err != nil {
+			return true
+		}
+
+		path := fmt.Sprintf("messages.%d.content", idx.Int())
+		next, err := sjson.SetRawBytes(out, path, newContentBytes)
+		if err == nil {
+			out = next
+			modified = true
+		}
+		return true
+	})
+
+	if !modified {
+		return body
+	}
+	// Remove the top-level reasoning_content field from assistant messages
+	// since we've moved it to the content array as a thinking block
+	out = removeTopLevelReasoningContent(out)
+
+	return out
+}
+
+// removeTopLevelReasoningContent removes reasoning_content from assistant messages
+// after it has been converted to a thinking block in the content array.
+func removeTopLevelReasoningContent(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+
+	if !bytes.Contains(body, []byte(`"reasoning_content"`)) {
+		return body
+	}
+
+	jsonStr := *(*string)(unsafe.Pointer(&body))
+	messages := gjson.Get(jsonStr, "messages")
+	if !messages.Exists() || !messages.IsArray() {
+		return body
+	}
+
+	out := body
+	messages.ForEach(func(idx gjson.Result, msg gjson.Result) bool {
+		role := msg.Get("role").String()
+		if role != "assistant" {
+			return true
+		}
+
+		if !msg.Get("reasoning_content").Exists() {
+			return true
+		}
+
+		path := fmt.Sprintf("messages.%d.reasoning_content", idx.Int())
+		next, err := sjson.DeleteBytes(out, path)
+		if err == nil {
+			out = next
+		}
+		return true
+	})
+
 	return out
 }
 
