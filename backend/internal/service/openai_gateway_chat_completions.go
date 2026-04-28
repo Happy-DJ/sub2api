@@ -66,6 +66,14 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
 
+	// Early exit: if the account uses passthrough or is a DeepSeek endpoint,
+	// forward the Chat Completions request directly without converting to
+	// Responses API. DeepSeek and similar OpenAI-compatible providers only
+	// support the /v1/chat/completions endpoint.
+	if account.IsOpenAIPassthroughEnabled() || isDeepSeekEndpoint(account) {
+		return s.forwardChatCompletionsPassthrough(ctx, c, account, body, originalModel, billingModel, upstreamModel, clientStream, includeUsage, startTime)
+	}
+
 	promptCacheKey = strings.TrimSpace(promptCacheKey)
 	compatPromptCacheInjected := false
 	if promptCacheKey == "" && account.Type == AccountTypeOAuth && shouldAutoInjectPromptCacheKeyForCompat(upstreamModel) {
@@ -641,4 +649,231 @@ func writeChatCompletionsError(c *gin.Context, statusCode int, errType, message 
 			"message": message,
 		},
 	})
+}
+
+// buildChatCompletionsURL 组装 OpenAI-compatible Chat Completions 端点 URL。
+// - base 以 /v1 结尾：追加 /chat/completions
+// - base 已包含 /chat/completions：原样返回
+// - 其他情况：追加 /v1/chat/completions
+func buildChatCompletionsURL(base string) string {
+	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
+	if strings.HasSuffix(normalized, "/chat/completions") {
+		return normalized
+	}
+	if strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/chat/completions"
+	}
+	return normalized + "/v1/chat/completions"
+}
+
+// forwardChatCompletionsPassthrough forwards the Chat Completions request directly
+// to the upstream without converting to Responses API. Used for OpenAI-compatible
+// providers (like DeepSeek) that only support the /v1/chat/completions endpoint.
+func (s *OpenAIGatewayService) forwardChatCompletionsPassthrough(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	originalModel string,
+	billingModel string,
+	upstreamModel string,
+	clientStream bool,
+	includeUsage bool,
+	startTime time.Time,
+) (*OpenAIForwardResult, error) {
+	// Apply model mapping if needed
+	if upstreamModel != "" && upstreamModel != originalModel {
+		var err error
+		body, err = sjson.SetBytes(body, "model", upstreamModel)
+		if err != nil {
+			return nil, fmt.Errorf("set upstream model: %w", err)
+		}
+	}
+
+	// DeepSeek thinking mode: convert reasoning_content to thinking blocks
+	if isDeepSeekEndpoint(account) {
+		body = convertReasoningContentToThinkingBlocks(body)
+	}
+
+	// Get access token
+	token, _, err := s.GetAccessToken(ctx, account)
+	if err != nil {
+		return nil, fmt.Errorf("get access token: %w", err)
+	}
+
+	// Build upstream URL for Chat Completions endpoint
+	targetURL := openaiPlatformAPIURL
+	if account.Type == AccountTypeAPIKey {
+		baseURL := account.GetOpenAIBaseURL()
+		if baseURL != "" {
+			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+			if err != nil {
+				return nil, err
+			}
+			targetURL = buildChatCompletionsURL(validatedURL)
+		}
+	}
+
+	upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create upstream request: %w", err)
+	}
+
+	// Forward client headers (passthrough style)
+	allowTimeoutHeaders := s.isOpenAIPassthroughTimeoutHeadersAllowed()
+	if c != nil && c.Request != nil {
+		for key, values := range c.Request.Header {
+			lower := strings.ToLower(strings.TrimSpace(key))
+			if !isOpenAIPassthroughAllowedRequestHeader(lower, allowTimeoutHeaders) {
+				continue
+			}
+			for _, v := range values {
+				upstreamReq.Header.Add(key, v)
+			}
+		}
+	}
+
+	// Override auth headers
+	upstreamReq.Header.Del("authorization")
+	upstreamReq.Header.Del("x-api-key")
+	upstreamReq.Header.Del("x-goog-api-key")
+	upstreamReq.Header.Set("authorization", "Bearer "+token)
+
+	setOpsUpstreamRequestBody(c, body)
+	if c != nil {
+		c.Set("openai_passthrough", true)
+	}
+
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+
+	upstreamStart := time.Now()
+	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
+	if err != nil {
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		setOpsUpstreamError(c, 0, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: 0,
+			Passthrough:        true,
+			Kind:               "request_error",
+			Message:            safeErr,
+		})
+		writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed")
+		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Handle error response
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
+		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+
+		if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
+			upstreamDetail := ""
+			if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+				maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+				if maxBytes <= 0 {
+					maxBytes = 2048
+				}
+				upstreamDetail = truncateString(string(respBody), maxBytes)
+			}
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: resp.StatusCode,
+				UpstreamRequestID:  resp.Header.Get("x-request-id"),
+				Kind:               "failover",
+				Message:            upstreamMsg,
+				Detail:             upstreamDetail,
+			})
+			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			return nil, &UpstreamFailoverError{
+				StatusCode:             resp.StatusCode,
+				ResponseBody:           respBody,
+				RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
+			}
+		}
+		// Passthrough: forward the error response as-is
+		if s.responseHeaderFilter != nil {
+			responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		}
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				c.Writer.Header().Add(k, v)
+			}
+		}
+		c.Writer.WriteHeader(resp.StatusCode)
+		c.Writer.Write(respBody) //nolint:errcheck
+		return nil, fmt.Errorf("upstream error: %s", upstreamMsg)
+	}
+
+	// Handle success response: passthrough the response directly
+	if s.responseHeaderFilter != nil {
+		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	}
+
+	var usage OpenAIUsage
+	var firstTokenMs *int
+
+	if clientStream {
+		// Streaming: passthrough SSE
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		c.Writer.WriteHeader(http.StatusOK)
+
+		firstChunk := true
+		scanner := bufio.NewScanner(resp.Body)
+		maxLineSize := defaultMaxLineSize
+		if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
+			maxLineSize = s.cfg.Gateway.MaxLineSize
+		}
+		scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+			if firstChunk && strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
+				firstChunk = false
+				ms := int(time.Since(startTime).Milliseconds())
+				firstTokenMs = &ms
+			}
+			if _, err := fmt.Fprintln(c.Writer, line); err != nil {
+				break
+			}
+			c.Writer.Flush()
+		}
+	} else {
+		// Non-streaming: passthrough JSON
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				c.Writer.Header().Add(k, v)
+			}
+		}
+		c.Writer.WriteHeader(http.StatusOK)
+		c.Writer.Write(respBody) //nolint:errcheck
+	}
+
+	return &OpenAIForwardResult{
+		RequestID:     resp.Header.Get("x-request-id"),
+		Usage:         usage,
+		Model:         originalModel,
+		BillingModel:  billingModel,
+		UpstreamModel: upstreamModel,
+		Stream:        clientStream,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
+	}, nil
 }
