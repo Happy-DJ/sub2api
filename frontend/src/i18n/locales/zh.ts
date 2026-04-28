@@ -604,7 +604,20 @@ export default {
     viewUsage: '查看使用记录',
     checkDetailedLogs: '查看详细的使用日志',
     redeemCode: '兑换码',
-    addBalanceWithCode: '使用兑换码充值'
+    addBalanceWithCode: '使用兑换码充值',
+    // Token Ranking
+    tokenRankingTitle: 'Token 使用榜',
+    tokenRankingToday: '今日排行',
+    tokenRankingMonthly: '本月排行',
+    tokenRankingHistory: '历史排行',
+    tokenRankingNo: '排名',
+    tokenRankingUsername: '用户名',
+    tokenRankingNickname: '昵称',
+    tokenRankingTokens: 'Token',
+    tokenRankingCost: '消费',
+    tokenRankingRequests: '请求数',
+    tokenRankingNoData: '暂无排行数据',
+    tokenRankingSelectMonth: '选择月份',
   },
 
   // Groups (shared)
@@ -1363,7 +1376,20 @@ export default {
       configureAiAccounts: '配置 AI 平台账号',
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
-      failedToLoad: '加载仪表盘数据失败'
+      failedToLoad: '加载仪表盘数据失败',
+      // Token Ranking
+      tokenRankingTitle: 'Token 使用榜',
+      tokenRankingToday: '今日排行',
+      tokenRankingMonthly: '本月排行',
+      tokenRankingHistory: '历史排行',
+      tokenRankingNo: '排名',
+      tokenRankingUsername: '用户名',
+      tokenRankingNickname: '昵称',
+      tokenRankingTokens: 'Token',
+      tokenRankingCost: '消费',
+      tokenRankingRequests: '请求数',
+      tokenRankingNoData: '暂无排行数据',
+      tokenRankingSelectMonth: '选择月份',
     },
 
     backup: {

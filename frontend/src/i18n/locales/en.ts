@@ -605,7 +605,20 @@ export default {
     viewUsage: 'View Usage',
     checkDetailedLogs: 'Check detailed usage logs',
     redeemCode: 'Redeem Code',
-    addBalanceWithCode: 'Add balance with a code'
+    addBalanceWithCode: 'Add balance with a code',
+    // Token Ranking
+    tokenRankingTitle: 'Token Usage Ranking',
+    tokenRankingToday: 'Today',
+    tokenRankingMonthly: 'Monthly',
+    tokenRankingHistory: 'All Time',
+    tokenRankingNo: 'Rank',
+    tokenRankingUsername: 'Username',
+    tokenRankingNickname: 'Nickname',
+    tokenRankingTokens: 'Tokens',
+    tokenRankingCost: 'Cost',
+    tokenRankingRequests: 'Requests',
+    tokenRankingNoData: 'No ranking data available',
+    tokenRankingSelectMonth: 'Select month',
   },
 
   // Groups (shared)
@@ -1342,7 +1355,20 @@ export default {
       spendShort: 'Spend',
       requestsShort: 'Req',
       tokensShort: 'Tok',
-      failedToLoad: 'Failed to load dashboard statistics'
+      failedToLoad: 'Failed to load dashboard statistics',
+      // Token Ranking
+      tokenRankingTitle: 'Token Usage Ranking',
+      tokenRankingToday: 'Today',
+      tokenRankingMonthly: 'Monthly',
+      tokenRankingHistory: 'All Time',
+      tokenRankingNo: 'Rank',
+      tokenRankingUsername: 'Username',
+      tokenRankingNickname: 'Nickname',
+      tokenRankingTokens: 'Tokens',
+      tokenRankingCost: 'Cost',
+      tokenRankingRequests: 'Requests',
+      tokenRankingNoData: 'No ranking data available',
+      tokenRankingSelectMonth: 'Select month',
     },
 
     backup: {

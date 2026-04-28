@@ -6404,6 +6404,13 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 		return true
 	}
 
+	// 检测 Kimi 等上游的 reasoning_content 缺失错误
+	// 例如: "thinking is enabled but reasoning_content is missing in assistant tool call message at index 19"
+	if strings.Contains(msg, "reasoning_content") && strings.Contains(msg, "missing") {
+		logger.LegacyPrintf("service.gateway", "[SignatureCheck] Detected reasoning_content missing error (Kimi/thinking compatibility)")
+		return true
+	}
+
 	return false
 }
 

@@ -286,6 +286,9 @@
               </div>
             </div>
           </div>
+
+          <!-- Token Usage Ranking -->
+          <AdminTokenRanking @row-click="goToUserUsage" />
         </div>
       </template>
     </div>
@@ -314,6 +317,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
+import AdminTokenRanking from '@/components/admin/dashboard/AdminTokenRanking.vue'
 
 import {
   Chart as ChartJS,

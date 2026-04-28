@@ -495,15 +495,18 @@ func parseRankingLimit(raw string) int {
 func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	limit := parseRankingLimit(c.DefaultQuery("limit", "12"))
+	sortBy := c.DefaultQuery("sort_by", "tokens")
 
 	keyRaw, _ := json.Marshal(struct {
-		Start string `json:"start"`
-		End   string `json:"end"`
-		Limit int    `json:"limit"`
+		Start  string `json:"start"`
+		End    string `json:"end"`
+		Limit  int    `json:"limit"`
+		SortBy string `json:"sort_by"`
 	}{
-		Start: startTime.UTC().Format(time.RFC3339),
-		End:   endTime.UTC().Format(time.RFC3339),
-		Limit: limit,
+		Start:  startTime.UTC().Format(time.RFC3339),
+		End:    endTime.UTC().Format(time.RFC3339),
+		Limit:  limit,
+		SortBy: sortBy,
 	})
 	cacheKey := string(keyRaw)
 	if cached, ok := dashboardUsersRankingCache.Get(cacheKey); ok {
@@ -512,7 +515,7 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 		return
 	}
 
-	ranking, err := h.dashboardService.GetUserSpendingRanking(c.Request.Context(), startTime, endTime, limit)
+	ranking, err := h.dashboardService.GetUserSpendingRanking(c.Request.Context(), startTime, endTime, limit, sortBy)
 	if err != nil {
 		response.Error(c, 500, "Failed to get user spending ranking")
 		return

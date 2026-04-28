@@ -359,3 +359,12 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetUserTokenRanking returns user token usage ranking for the given time range.
+func (s *UsageService) GetUserTokenRanking(ctx context.Context, startTime, endTime time.Time, limit int) (*usagestats.UserSpendingRankingResponse, error) {
+	ranking, err := s.usageRepo.GetUserSpendingRanking(ctx, startTime, endTime, limit, "tokens")
+	if err != nil {
+		return nil, fmt.Errorf("get user token ranking: %w", err)
+	}
+	return ranking, nil
+}

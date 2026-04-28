@@ -2758,6 +2758,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		body = sanitizedBody
 	}
 
+	// Kimi 等上游要求 assistant tool_call 消息携带 reasoning_content
+	body = injectReasoningContentForToolCalls(body)
+
 	logger.LegacyPrintf("service.openai_gateway",
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
 		account.ID,
@@ -4851,6 +4854,58 @@ func OpenAICompactSessionSeedKeyForTest() string {
 
 func NormalizeOpenAICompactRequestBodyForTest(body []byte) ([]byte, bool, error) {
 	return normalizeOpenAICompactRequestBody(body)
+}
+
+// injectReasoningContentForToolCalls 为 Chat Completions 请求中 assistant 的 tool_call 消息
+// 补齐缺失的 reasoning_content 字段。
+//
+// Kimi 等上游要求：当 thinking 模式启用时，assistant 消息若包含 tool_calls，
+// 则必须携带 reasoning_content 字段，否则返回 400：
+//
+//	"thinking is enabled but reasoning_content is missing in assistant tool call message at index N"
+//
+// 此函数遍历 messages 数组，为满足以下所有条件的消息注入 reasoning_content：
+//   - role == "assistant"
+//   - tool_calls 存在且非空
+//   - reasoning_content 字段缺失或为空
+func injectReasoningContentForToolCalls(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+
+	messages := gjson.GetBytes(body, "messages")
+	if !messages.Exists() || !messages.IsArray() {
+		return body
+	}
+
+	modified := false
+	out := body
+
+	messages.ForEach(func(idx, msg gjson.Result) bool {
+		if msg.Get("role").String() != "assistant" {
+			return true
+		}
+		toolCalls := msg.Get("tool_calls")
+		if !toolCalls.Exists() || !toolCalls.IsArray() || len(toolCalls.Array()) == 0 {
+			return true
+		}
+		rc := msg.Get("reasoning_content")
+		if rc.Exists() && rc.String() != "" {
+			return true
+		}
+		path := fmt.Sprintf("messages.%d.reasoning_content", idx.Int())
+		next, err := sjson.SetBytes(out, path, ".")
+		if err == nil {
+			out = next
+			modified = true
+		}
+		return true
+	})
+
+	if !modified {
+		return body
+	}
+	return out
 }
 
 func isOpenAIResponsesCompactPath(c *gin.Context) bool {

@@ -416,3 +416,126 @@ func (h *UsageHandler) DashboardAPIKeysUsage(c *gin.Context) {
 
 	response.Success(c, gin.H{"stats": stats})
 }
+
+// DashboardRankingToday handles getting today's user token ranking.
+// GET /api/v1/usage/dashboard/ranking-today
+func (h *UsageHandler) DashboardRankingToday(c *gin.Context) {
+	_, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	startOfDay := timezone.StartOfDayInUserLocation(now, userTZ)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
+
+	limit := 20
+	ranking, err := h.usageService.GetUserTokenRanking(c.Request.Context(), startOfDay, endOfDay, limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"ranking":        ranking.Ranking,
+		"total_tokens":   ranking.TotalTokens,
+		"total_requests": ranking.TotalRequests,
+		"total_cost":    ranking.TotalActualCost,
+		"start_date":    startOfDay.Format("2006-01-02"),
+		"end_date":      startOfDay.Format("2006-01-02"),
+	})
+}
+
+// DashboardRankingMonthly handles getting monthly user token ranking.
+// GET /api/v1/usage/dashboard/ranking-monthly
+func (h *UsageHandler) DashboardRankingMonthly(c *gin.Context) {
+	_, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+
+	yearStr := c.Query("year")
+	monthStr := c.Query("month")
+
+	var year, month int
+	if yearStr != "" && monthStr != "" {
+		y, err := strconv.Atoi(yearStr)
+		if err != nil || y < 2000 || y > 2100 {
+			response.BadRequest(c, "Invalid year parameter")
+			return
+		}
+		m, err := strconv.Atoi(monthStr)
+		if err != nil || m < 1 || m > 12 {
+			response.BadRequest(c, "Invalid month parameter")
+			return
+		}
+		year = y
+		month = m
+	} else {
+		year = now.Year()
+		month = int(now.Month())
+	}
+
+	// Check if the month is in the future
+	requestedMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, now.Location())
+	currentMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	if requestedMonth.After(currentMonth) {
+		response.BadRequest(c, "Cannot query future month")
+		return
+	}
+
+	startOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, now.Location())
+	endOfMonth := startOfMonth.AddDate(0, 1, 0)
+
+	limit := 20
+	ranking, err := h.usageService.GetUserTokenRanking(c.Request.Context(), startOfMonth, endOfMonth, limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"ranking":        ranking.Ranking,
+		"total_tokens":   ranking.TotalTokens,
+		"total_requests": ranking.TotalRequests,
+		"total_cost":    ranking.TotalActualCost,
+		"start_date":    startOfMonth.Format("2006-01"),
+		"end_date":      endOfMonth.AddDate(0, 0, -1).Format("2006-01"),
+	})
+}
+
+// DashboardRankingHistory handles getting all-time user token ranking.
+// GET /api/v1/usage/dashboard/ranking-history
+func (h *UsageHandler) DashboardRankingHistory(c *gin.Context) {
+	_, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	// For history ranking, use a very old start time
+	startOfHistory := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Now()
+
+	limit := 20
+	ranking, err := h.usageService.GetUserTokenRanking(c.Request.Context(), startOfHistory, now, limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"ranking":        ranking.Ranking,
+		"total_tokens":   ranking.TotalTokens,
+		"total_requests": ranking.TotalRequests,
+		"total_cost":    ranking.TotalActualCost,
+		"start_date":    startOfHistory.Format("2006-01-02"),
+		"end_date":      now.Format("2006-01-02"),
+	})
+}

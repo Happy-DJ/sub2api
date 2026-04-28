@@ -53,10 +53,11 @@ func (s *dashboardUsageRepoCapture) GetModelStatsWithFilters(
 }
 
 func (s *dashboardUsageRepoCapture) GetUserSpendingRanking(
-	ctx context.Context,
-	startTime, endTime time.Time,
-	limit int,
-) (*usagestats.UserSpendingRankingResponse, error) {
+		ctx context.Context,
+		startTime, endTime time.Time,
+		limit int,
+		sortBy string,
+	) (*usagestats.UserSpendingRankingResponse, error) {
 	s.rankingLimit = limit
 	return &usagestats.UserSpendingRankingResponse{
 		Ranking:         s.ranking,

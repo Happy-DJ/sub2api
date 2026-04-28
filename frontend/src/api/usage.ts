@@ -257,6 +257,50 @@ export async function getDashboardApiKeysUsage(
   return data
 }
 
+// ==================== Ranking API ====================
+
+export interface RankingResponse {
+  ranking: {
+    user_id: number
+    email: string
+    username: string
+    actual_cost: number
+    requests: number
+    tokens: number
+  }[]
+  total_tokens: number
+  total_requests: number
+  total_cost: number
+  start_date: string
+  end_date: string
+}
+
+/**
+ * Get today's user token ranking
+ */
+export async function getRankingToday(): Promise<RankingResponse> {
+  const { data } = await apiClient.get<RankingResponse>('/usage/dashboard/ranking-today')
+  return data
+}
+
+/**
+ * Get monthly user token ranking
+ * @param year - Year (e.g. 2026)
+ * @param month - Month (1-12)
+ */
+export async function getRankingMonthly(params?: { year?: number; month?: number }): Promise<RankingResponse> {
+  const { data } = await apiClient.get<RankingResponse>('/usage/dashboard/ranking-monthly', { params })
+  return data
+}
+
+/**
+ * Get all-time user token ranking
+ */
+export async function getRankingHistory(): Promise<RankingResponse> {
+  const { data } = await apiClient.get<RankingResponse>('/usage/dashboard/ranking-history')
+  return data
+}
+
 export const usageAPI = {
   list,
   query,
@@ -268,7 +312,11 @@ export const usageAPI = {
   getDashboardStats,
   getDashboardTrend,
   getDashboardModels,
-  getDashboardApiKeysUsage
+  getDashboardApiKeysUsage,
+  // Ranking
+  getRankingToday,
+  getRankingMonthly,
+  getRankingHistory
 }
 
 export default usageAPI
