@@ -352,6 +352,7 @@ export default {
     groups: 'Groups',
     channels: 'Channels',
     availableChannels: 'Available Channels',
+    modelPlaza: 'Model Plaza',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     proxies: 'Proxies',
@@ -984,6 +985,22 @@ export default {
       unitPerMillion: '/ 1M tokens',
       unitPerRequest: '/ request'
     }
+  },
+
+  modelPlaza: {
+    title: 'Model Plaza',
+    description: 'Browse all available AI models and pricing information',
+    searchPlaceholder: 'Search model names...',
+    allPlatforms: 'All Platforms',
+    inputPrice: 'Input',
+    outputPrice: 'Output',
+    cacheReadPrice: 'Cache Read',
+    perMillionTokens: '/ Million Tokens',
+    supportsCaching: 'Supports Caching',
+    supportsVision: 'Supports Vision',
+    noPricing: 'Pricing unavailable',
+    empty: 'No models available',
+    copyModelName: 'Copy model name',
   },
 
   affiliate: {

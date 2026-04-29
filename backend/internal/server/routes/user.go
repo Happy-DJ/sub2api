@@ -115,6 +115,12 @@ func RegisterUserRoutes(
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
 		}
 
+		// 模型广场
+		models := authenticated.Group("/models")
+		{
+			models.GET("", h.ModelPlaza.List)
+		}
+
 		// 渠道监控（用户只读）
 		monitors := authenticated.Group("/channel-monitors")
 		{

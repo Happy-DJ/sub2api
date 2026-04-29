@@ -700,6 +700,9 @@ func (s *OpenAIGatewayService) forwardChatCompletionsPassthrough(
 		}
 	}
 
+	// Kimi 等上游要求 assistant tool_call 消息携带 reasoning_content
+	body = injectReasoningContentForToolCalls(body)
+
 	// DeepSeek thinking mode: convert reasoning_content to thinking blocks
 	if isDeepSeekEndpoint(account) {
 		body = convertReasoningContentToThinkingBlocks(body)

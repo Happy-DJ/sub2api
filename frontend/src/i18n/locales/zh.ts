@@ -352,6 +352,7 @@ export default {
     groups: '分组管理',
     channels: '渠道管理',
     availableChannels: '可用渠道',
+    modelPlaza: '模型广场',
     subscriptions: '订阅管理',
     accounts: '账号管理',
     proxies: 'IP管理',
@@ -988,6 +989,22 @@ export default {
       unitPerMillion: '/ 1M token',
       unitPerRequest: '/ 次'
     }
+  },
+
+  modelPlaza: {
+    title: '模型广场',
+    description: '浏览平台所有可用 AI 模型与定价信息',
+    searchPlaceholder: '搜索模型名称...',
+    allPlatforms: '全部平台',
+    inputPrice: '输入',
+    outputPrice: '输出',
+    cacheReadPrice: '缓存读取',
+    perMillionTokens: '/百万 Token',
+    supportsCaching: '支持缓存',
+    supportsVision: '支持视觉',
+    noPricing: '暂无定价',
+    empty: '暂无可用模型',
+    copyModelName: '复制模型名称',
   },
 
   affiliate: {
