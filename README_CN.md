@@ -622,7 +622,19 @@ go generate ./cmd/server
 ```
 
 ---
+## STJ环境部署
 
+进入仓库 `deploy` 目录后，运行脚本移除容器并打包
+
+```bash
+
+cd deplpy
+
+docker rm -f sub2api-postgres sub2api-redis sub2api 2>/dev/null; docker-compose up -d --build
+
+```
+
+---
 ## 简易模式
 
 简易模式适合个人开发者或内部团队快速使用，不依赖完整 SaaS 功能。
