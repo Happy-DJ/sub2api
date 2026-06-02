@@ -25,9 +25,9 @@ import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.v
 import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue';
 import UserDashboardQuickActions from '@/components/user/dashboard/UserDashboardQuickActions.vue'
-import { getMyPlatformQuotas } from '@/api/user'
 import UserDashboardRanking from '@/components/user/dashboard/UserDashboardRanking.vue'
-import type { UsageLog, TrendDataPoint, ModelStat } from '@/types'
+import type { UsageLog, TrendDataPoint, ModelStat,PlatformQuotaItem } from '@/types'
+import { getMyPlatformQuotas } from '@/api/user'
 
 const authStore = useAuthStore(); const user = computed(() => authStore.user)
 const stats = ref<UserStatsType | null>(null); const loading = ref(false); const loadingUsage = ref(false); const loadingCharts = ref(false)
