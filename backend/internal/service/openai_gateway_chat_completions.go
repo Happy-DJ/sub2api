@@ -76,6 +76,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	}
 	originalModel := chatReq.Model
 	clientStream := chatReq.Stream
+	includeUsage := chatReq.StreamOptions != nil && chatReq.StreamOptions.IncludeUsage
 
 	// 2. Resolve model mapping early so compat prompt_cache_key injection can
 	// derive a stable seed from the final upstream model family.
@@ -1060,4 +1061,73 @@ func (s *OpenAIGatewayService) forwardChatCompletionsPassthrough(
 		Duration:      time.Since(startTime),
 		FirstTokenMs:  firstTokenMs,
 	}, nil
+}
+
+// isDeepSeekEndpoint 判断账号是否指向 DeepSeek 上游。
+// 通过 base_url 域名特征检测（api.deepseek.com 或 deepseek 相关域名）。
+func isDeepSeekEndpoint(account *Account) bool {
+	if account.Type != AccountTypeAPIKey {
+		return false
+	}
+	baseURL := account.GetOpenAIBaseURL()
+	if baseURL == "" {
+		return false
+	}
+	lower := strings.ToLower(baseURL)
+	return strings.Contains(lower, "deepseek")
+}
+
+// injectReasoningContentForToolCalls 为 assistant tool_call 消息注入 reasoning_content。
+// Kimi 等上游要求 assistant tool_call 消息携带 reasoning_content 字段，
+// 如果历史消息中 assistant 的 tool_call 消息缺少 reasoning_content，则补充空字符串。
+func injectReasoningContentForToolCalls(body []byte) []byte {
+	msgs := gjson.GetBytes(body, "messages")
+	if !msgs.Exists() || !msgs.IsArray() {
+		return body
+	}
+	changed := false
+	for i, m := range msgs.Array() {
+		role := m.Get("role").String()
+		if role != "assistant" {
+			continue
+		}
+		tcs := m.Get("tool_calls")
+		if !tcs.Exists() || !tcs.IsArray() || len(tcs.Array()) == 0 {
+			continue
+		}
+		rc := m.Get("reasoning_content")
+		if rc.Exists() {
+			continue
+		}
+		// 补充空 reasoning_content
+		path := fmt.Sprintf("messages.%d.reasoning_content", i)
+		var err error
+		body, err = sjson.SetBytes(body, path, "")
+		if err == nil {
+			changed = true
+		}
+	}
+	if changed {
+		return body
+	}
+	return body
+}
+
+// convertReasoningContentToThinkingBlocks 将 DeepSeek 的 reasoning_content 字段
+// 转换为 thinking_blocks 格式（DeepSeek thinking mode 兼容）。
+func convertReasoningContentToThinkingBlocks(body []byte) []byte {
+	msgs := gjson.GetBytes(body, "messages")
+	if !msgs.Exists() || !msgs.IsArray() {
+		return body
+	}
+	for i, m := range msgs.Array() {
+		rc := m.Get("reasoning_content")
+		if !rc.Exists() || rc.String() == "" {
+			continue
+		}
+		path := fmt.Sprintf("messages.%d", i)
+		body, _ = sjson.SetBytes(body, path+".thinking", rc.String())
+		body, _ = sjson.DeleteBytes(body, path+".reasoning_content")
+	}
+	return body
 }
