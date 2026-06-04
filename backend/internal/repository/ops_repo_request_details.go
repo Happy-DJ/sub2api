@@ -99,6 +99,8 @@ WITH combined AS (
     NULL::TEXT AS severity,
     NULL::TEXT AS message,
     ul.user_id AS user_id,
+    COALESCE(u.email, '') AS user_email,
+    COALESCE(u.username, '') AS user_nickname,
     ul.api_key_id AS api_key_id,
     ul.account_id AS account_id,
     ul.group_id AS group_id,
@@ -106,6 +108,7 @@ WITH combined AS (
   FROM usage_logs ul
   LEFT JOIN groups g ON g.id = ul.group_id
   LEFT JOIN accounts a ON a.id = ul.account_id
+  LEFT JOIN users u ON u.id = ul.user_id
   WHERE ul.created_at >= $1 AND ul.created_at < $2
 
   UNION ALL
@@ -123,6 +126,8 @@ WITH combined AS (
     o.severity AS severity,
     o.error_message AS message,
     o.user_id AS user_id,
+    COALESCE(u.email, '') AS user_email,
+    COALESCE(u.username, '') AS user_nickname,
     o.api_key_id AS api_key_id,
     o.account_id AS account_id,
     o.group_id AS group_id,
@@ -130,6 +135,7 @@ WITH combined AS (
   FROM ops_error_logs o
   LEFT JOIN groups g ON g.id = o.group_id
   LEFT JOIN accounts a ON a.id = o.account_id
+  LEFT JOIN users u ON u.id = o.user_id
   WHERE o.created_at >= $1 AND o.created_at < $2
     AND COALESCE(o.status_code, 0) >= 400
 )
@@ -172,6 +178,8 @@ SELECT
   severity,
   message,
   user_id,
+  user_email,
+  user_nickname,
   api_key_id,
   account_id,
   group_id,
@@ -221,10 +229,12 @@ LIMIT $%d OFFSET $%d
 			severity sql.NullString
 			message  sql.NullString
 
-			userID    sql.NullInt64
-			apiKeyID  sql.NullInt64
-			accountID sql.NullInt64
-			groupID   sql.NullInt64
+			userID      sql.NullInt64
+			userEmail   string
+			userNickname string
+			apiKeyID    sql.NullInt64
+			accountID   sql.NullInt64
+			groupID     sql.NullInt64
 
 			stream bool
 		)
@@ -242,6 +252,8 @@ LIMIT $%d OFFSET $%d
 			&severity,
 			&message,
 			&userID,
+			&userEmail,
+			&userNickname,
 			&apiKeyID,
 			&accountID,
 			&groupID,
@@ -265,6 +277,8 @@ LIMIT $%d OFFSET $%d
 			Message:    message.String,
 
 			UserID:    toInt64Ptr(userID),
+			UserEmail: strings.TrimSpace(userEmail),
+			Username:  strings.TrimSpace(userNickname),
 			APIKeyID:  toInt64Ptr(apiKeyID),
 			AccountID: toInt64Ptr(accountID),
 			GroupID:   toInt64Ptr(groupID),

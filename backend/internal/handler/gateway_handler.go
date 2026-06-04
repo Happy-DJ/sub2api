@@ -1341,8 +1341,17 @@ func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, e
 // ensureForwardErrorResponse 在 Forward 返回错误但尚未写响应时补写统一错误响应。
 func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarted bool) bool {
 	if c == nil || c.Writer == nil || c.Writer.Written() {
+		logger.L().Info("debug.duplicate_error.gateway.ensureForwardErrorResponse.skip",
+			zap.Bool("writer_nil", c == nil || c.Writer == nil),
+			zap.Bool("written", c != nil && c.Writer != nil && c.Writer.Written()),
+			zap.String("caller", service.GetCaller(1)),
+		)
 		return false
 	}
+	logger.L().Warn("debug.duplicate_error.gateway.ensureForwardErrorResponse.write",
+		zap.Bool("streamStarted", streamStarted),
+		zap.String("caller", service.GetCaller(1)),
+	)
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
 }

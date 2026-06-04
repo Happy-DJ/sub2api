@@ -589,6 +589,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 
 // writeAnthropicError writes an error response in Anthropic Messages API format.
 func writeAnthropicError(c *gin.Context, statusCode int, errType, message string) {
+	logger.L().Warn("debug.duplicate_error.writeAnthropicError",
+		zap.Int("status", statusCode),
+		zap.String("errType", errType),
+		zap.String("message", message),
+		zap.Bool("written", c.Writer.Written()),
+		zap.String("caller", getCaller(2)),
+	)
 	c.JSON(statusCode, gin.H{
 		"type": "error",
 		"error": gin.H{

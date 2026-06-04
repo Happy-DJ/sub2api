@@ -3745,6 +3745,13 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
+		logger.L().Warn("debug.duplicate_error.handleErrorResponse.passthrough",
+			zap.Int("status", status),
+			zap.String("errType", errType),
+			zap.String("errMsg", errMsg),
+			zap.Bool("written", c.Writer.Written()),
+			zap.String("caller", getCaller(2)),
+		)
 		c.JSON(status, gin.H{
 			"error": gin.H{
 				"type":    errType,
@@ -4060,6 +4067,11 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		if errorEventSent || clientDisconnected {
 			return
 		}
+		logger.L().Warn("debug.duplicate_error.sendErrorEvent",
+			zap.String("reason", reason),
+			zap.Bool("clientOutputStarted", clientOutputStarted),
+			zap.String("caller", getCaller(2)),
+		)
 		errorEventSent = true
 		payload := `{"type":"error","sequence_number":0,"error":{"type":"upstream_error","message":` + strconv.Quote(reason) + `,"code":` + strconv.Quote(reason) + `}}`
 		if err := flushBuffered(); err != nil {

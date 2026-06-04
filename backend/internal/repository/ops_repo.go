@@ -234,6 +234,7 @@ SELECT
   COALESCE(e.error_message, ''),
   e.user_id,
   COALESCE(u.email, ''),
+  COALESCE(u.username, ''),
   e.api_key_id,
   e.account_id,
   COALESCE(a.name, ''),
@@ -274,6 +275,7 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 		var groupID sql.NullInt64
 		var groupName string
 		var userEmail string
+		var username string
 		var resolvedAt sql.NullTime
 		var resolvedBy sql.NullInt64
 		var resolvedByName string
@@ -302,6 +304,7 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 			&item.Message,
 			&userID,
 			&userEmail,
+			&username,
 			&apiKeyID,
 			&accountID,
 			&accountName,
@@ -341,6 +344,7 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 			item.UserID = &v
 		}
 		item.UserEmail = userEmail
+		item.Username = username
 		if apiKeyID.Valid {
 			v := apiKeyID.Int64
 			item.APIKeyID = &v
@@ -410,6 +414,7 @@ SELECT
   e.is_business_limited,
   e.user_id,
   COALESCE(u.email, ''),
+  COALESCE(u.username, ''),
   e.api_key_id,
   e.account_id,
   COALESCE(a.name, ''),
@@ -487,6 +492,7 @@ LIMIT 1`
 		&out.IsBusinessLimited,
 		&userID,
 		&out.UserEmail,
+		&out.Username,
 		&apiKeyID,
 		&accountID,
 		&out.AccountName,

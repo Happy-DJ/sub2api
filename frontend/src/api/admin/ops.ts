@@ -181,6 +181,8 @@ export interface OpsRequestDetail {
   message?: string
 
   user_id?: number | null
+  user_email?: string
+  user_nickname?: string
   api_key_id?: number | null
   account_id?: number | null
   group_id?: number | null
@@ -960,6 +962,7 @@ export interface OpsErrorLog {
 
   user_id?: number | null
   user_email: string
+  user_nickname: string
   api_key_id?: number | null
   account_id?: number | null
   account_name: string

@@ -37,8 +37,22 @@
               {{ detail.account_name || (detail.account_id != null ? String(detail.account_id) : '—') }}
             </template>
             <template v-else>
-              {{ detail.user_email || (detail.user_id != null ? String(detail.user_id) : '—') }}
+              {{ detail.user_nickname || detail.user_email || (detail.user_id != null ? String(detail.user_id) : '—') }}
             </template>
+          </div>
+        </div>
+
+        <div v-if="!isUpstreamError(detail) && (detail.user_email || detail.user_nickname)" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.userEmail') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.user_email || '—' }}
+          </div>
+        </div>
+
+        <div v-if="!isUpstreamError(detail) && detail.user_nickname" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.userNickname') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.user_nickname || '—' }}
           </div>
         </div>
 

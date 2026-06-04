@@ -815,6 +815,14 @@ func (h *OpenAIGatewayHandler) anthropicErrorResponse(c *gin.Context, status int
 // anthropicStreamingAwareError handles errors that may occur during streaming,
 // using Anthropic SSE error format.
 func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, status int, errType, message string, streamStarted bool) {
+	logger.L().Warn("debug.duplicate_error.anthropicStreamingAwareError",
+		zap.Int("status", status),
+		zap.String("errType", errType),
+		zap.String("message", message),
+		zap.Bool("streamStarted", streamStarted),
+		zap.Bool("written", c.Writer.Written()),
+		zap.String("caller", service.GetCaller(2)),
+	)
 	if streamStarted {
 		flusher, ok := c.Writer.(http.Flusher)
 		if ok {
@@ -842,8 +850,17 @@ func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, 
 // ensureAnthropicErrorResponse writes a fallback Anthropic error if no response was written.
 func (h *OpenAIGatewayHandler) ensureAnthropicErrorResponse(c *gin.Context, streamStarted bool) bool {
 	if c == nil || c.Writer == nil || c.Writer.Written() {
+		logger.L().Info("debug.duplicate_error.ensureAnthropicErrorResponse.skip",
+			zap.Bool("writer_nil", c == nil || c.Writer == nil),
+			zap.Bool("written", c != nil && c.Writer != nil && c.Writer.Written()),
+			zap.String("caller", service.GetCaller(1)),
+		)
 		return false
 	}
+	logger.L().Warn("debug.duplicate_error.ensureAnthropicErrorResponse.write",
+		zap.Bool("streamStarted", streamStarted),
+		zap.String("caller", service.GetCaller(1)),
+	)
 	h.anthropicStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
 	return true
 }
@@ -1518,6 +1535,14 @@ func (h *OpenAIGatewayHandler) mapUpstreamError(statusCode int) (int, string, st
 
 // handleStreamingAwareError handles errors that may occur after streaming has started
 func (h *OpenAIGatewayHandler) handleStreamingAwareError(c *gin.Context, status int, errType, message string, streamStarted bool) {
+	logger.L().Warn("debug.duplicate_error.handleStreamingAwareError",
+		zap.Int("status", status),
+		zap.String("errType", errType),
+		zap.String("message", message),
+		zap.Bool("streamStarted", streamStarted),
+		zap.Bool("written", c.Writer.Written()),
+		zap.String("caller", service.GetCaller(2)),
+	)
 	if streamStarted {
 		// Stream already started, send error as SSE event then close
 		flusher, ok := c.Writer.(http.Flusher)
@@ -1539,8 +1564,17 @@ func (h *OpenAIGatewayHandler) handleStreamingAwareError(c *gin.Context, status 
 // ensureForwardErrorResponse 在 Forward 返回错误但尚未写响应时补写统一错误响应。
 func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarted bool) bool {
 	if c == nil || c.Writer == nil || c.Writer.Written() {
+		logger.L().Info("debug.duplicate_error.ensureForwardErrorResponse.skip",
+			zap.Bool("writer_nil", c == nil || c.Writer == nil),
+			zap.Bool("written", c != nil && c.Writer != nil && c.Writer.Written()),
+			zap.String("caller", service.GetCaller(1)),
+		)
 		return false
 	}
+	logger.L().Warn("debug.duplicate_error.ensureForwardErrorResponse.write",
+		zap.Bool("streamStarted", streamStarted),
+		zap.String("caller", service.GetCaller(1)),
+	)
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
 }

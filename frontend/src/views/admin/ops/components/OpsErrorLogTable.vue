@@ -140,7 +140,7 @@
                 <template v-else>
                   <el-tooltip v-if="log.user_id" :content="t('admin.ops.errorLog.userId') + ' ' + log.user_id" placement="top" :show-after="500">
                     <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
-                      {{ log.user_email || '-' }}
+                      {{ log.user_nickname || log.user_email || '-' }}
                     </span>
                   </el-tooltip>
                   <span v-else class="text-xs text-gray-400">-</span>
