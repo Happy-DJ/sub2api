@@ -184,7 +184,7 @@ func (s *ModelPlazaService) aggToEntry(m *modelAgg) model.ModelPlazaEntry {
 	// LiteLLM 全局定价回落
 	if pricing == nil && s.pricing != nil {
 		if lp := s.pricing.GetModelPricing(m.name); lp != nil {
-			pricing = synthesizePricingFromLiteLLM(lp)
+			pricing = synthesizePricingFromLiteLLM(lp, pricing)
 		}
 	}
 
